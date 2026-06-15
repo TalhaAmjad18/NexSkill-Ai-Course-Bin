@@ -11,3 +11,7 @@ bookPrice = 45.5
 print(bookPrice)
 
 print("my code ends here")
+
+name = input("Enter your name: ")
+
+print("Your name is: " + name)
