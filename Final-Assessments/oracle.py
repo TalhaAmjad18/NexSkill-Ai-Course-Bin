@@ -12,7 +12,7 @@ from sklearn.tree import DecisionTreeClassifier, DecisionTreeRegressor
 from sklearn.ensemble import RandomForestClassifier, RandomForestRegressor
 from sklearn.metrics import accuracy_score, confusion_matrix, classification_report, mean_absolute_error, mean_squared_error, r2_score
 from tensorflow.keras.models import Sequential
-from tensorflow.keras.layers import LSTM, Dense, Dropout
+from tensorflow.keras.layers import LSTM, GRU, Dense, Dropout
 
 df = pd.read_csv(r'Oracle.csv', parse_dates=['Date'], index_col='Date')
 print(df.head())
@@ -477,6 +477,68 @@ plt.plot(y_pred, label='Predicted')
 plt.legend()
 # plt.show()
 
+# Now we will use deep learning to predict Tomorrow Return and for this purpose we will use GRU
+# first of all we will create X and y
+window_size = 30
+X = list()
+y = list()
+for i in range(window_size, len(df)):
+    X.append(df[X_columns].iloc[i-window_size: i])
+    y.append(df['Tomorrow Return'].iloc[i])
+
+X = np.array(X)
+y = np.array(y)
+
+split = int(len(X) * 0.8)
+X_train = X[:split]
+X_test = X[split:]
+y_train = y[:split]
+y_test = y[split:]
+
+print(X_train.shape)
+print(X_test.shape)
+print(y_train.shape)
+print(y_test.shape)
+
+scaler_X = MinMaxScaler(feature_range=(0,1))
+X_train = scaler_X.fit_transform(X_train.reshape(-1, X_train.shape[2]))
+X_test = scaler_X.transform(X_test.reshape(-1, X_test.shape[2]))
+X_train = X_train.reshape(-1, window_size, X_train.shape[1])
+X_test = X_test.reshape(-1, window_size, X_test.shape[1])
+scaler_y = MinMaxScaler(feature_range=(0,1))
+y_train = scaler_y.fit_transform(y_train.reshape(-1,1))
+y_test = scaler_y.transform(y_test.reshape(-1,1))
+
+model = Sequential([
+    GRU(units=64, return_sequences=True, input_shape=(window_size, X_train.shape[2])),
+    Dropout(0.3),
+    GRU(units=64),
+    Dense(1, 'linear')
+])
+model.compile(optimizer='adam', loss='mean_squared_error', metrics=['mean_squared_error'])
+history = model.fit(X_train, y_train, epochs=32, batch_size=32, validation_split=0.1, shuffle=False)
+model.evaluate(X_test, y_test)
+model.summary()
+
+y_pred_scaled = model.predict(X_test)
+y_pred = scaler_y.inverse_transform(y_pred_scaled)
+y_test = scaler_y.inverse_transform(y_test)
+print('R2 Score: ', r2_score(y_test, y_pred))
+print('Mean Absolute Error: ', mean_absolute_error(y_test, y_pred))
+print('Mean Squared Error: ', mean_squared_error(y_test, y_pred))
+print('Root Mean Squared Error: ', np.sqrt(mean_squared_error(y_test, y_pred)))
+
+# R2 Score:  -0.09214496219575646
+# Mean Absolute Error:  0.014515370834176027
+# Mean Squared Error:  0.0004969614518103832
+# Root Mean Squared Error:  0.022292632231532983
+
+plt.figure(figsize=(10,8))
+plt.plot(y_test, label='Actual')
+plt.plot(y_pred, label='Predicted')
+plt.legend()
+# plt.show()
+
 # Now we will use deep learning to predict Up / Down and for this purpose we will use LSTM
 X = list()
 y = list()
@@ -521,6 +583,51 @@ print('Confusion Matrix: ', confusion_matrix(y_test, y_pred))
 print('Classification Report: ', classification_report(y_test, y_pred))
 
 # Accuracy Score:  0.4398496240601504
+
+# Now we will use deep learning to predict Up / Down and for this purpose we will use GRU
+X = list()
+y = list()
+for i in range(window_size, len(df)):
+    X.append(df[X_columns].iloc[i-window_size: i])
+    y.append(df['Up / Down'].iloc[i])
+
+X = np.array(X)
+y = np.array(y)
+
+split = int(len(X) * 0.8)
+X_train = X[:split]
+X_test = X[split:]
+y_train = y[:split]
+y_test = y[split:]
+
+print(X_train.shape)
+print(X_test.shape)
+print(y_train.shape)
+print(y_test.shape)
+
+scaler_X = MinMaxScaler(feature_range=(0,1))
+X_train = scaler_X.fit_transform(X_train.reshape(-1, X_train.shape[2]))
+X_test = scaler_X.transform(X_test.reshape(-1, X_test.shape[2]))
+X_train = X_train.reshape(-1, window_size, X_train.shape[1])
+X_test = X_test.reshape(-1, window_size, X_test.shape[1])
+
+model = Sequential([
+    GRU(units=64, return_sequences=True, input_shape=(window_size, X_train.shape[2])),
+    Dropout(0.3),
+    GRU(units=64),
+    Dense(1, 'sigmoid')
+])
+model.compile(optimizer='adam', loss='binary_crossentropy', metrics=['accuracy'])
+history = model.fit(X_train, y_train, epochs=32, batch_size=32, validation_split=0.1, shuffle=False)
+model.evaluate(X_test, y_test)
+model.summary()
+y_pred_prob = model.predict(X_test)
+y_pred = (y_pred_prob >= 0.5).astype(int).ravel()
+print('Accuracy Score: ', accuracy_score(y_test, y_pred))
+print('Confusion Matrix: ', confusion_matrix(y_test, y_pred))
+print('Classification Report: ', classification_report(y_test, y_pred))
+
+# Accuracy Score:  0.4498496240601504
 
 # Backtesting
 
